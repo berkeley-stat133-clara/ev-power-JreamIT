@@ -25,29 +25,32 @@ energy_sources <- c("Solar (MWh)", "Wind (GWh)", "Coal (MWh)", "Hydro (kWh)")
 a.  Use str_detect() to identify all energy sources that contain the substring "Wind" or "Hydro" (hint: use the \| operator in regex).
 
 ```{r}
-
+str_detect(energy_sources, regex("Wind|Hydro"))
 ```
 
 b.  Extract the unit type (e.g., MWh, GWh, kWh) using str_extract(). Make sure your pattern handles extra spaces or hyphens.
 
 ```{r}
-
+source_energy <- str_extract(energy_sources, regex("[MGk]Wh"))
+source_energy
 ```
 
 c.  Clean the names to keep only the energy source name, trimming whitespace and removing parentheses.
 
 ```{r}
-
+unit_energy <- str_extract(energy_sources, regex("[\\w]*"))
+unit_energy
 ```
 
 d.  Create a clean tibble called energy_clean with two columns: source and unit.
 
 ```{r}
-
+energy_clean <-tibble(source = source_energy, unit = unit_energy)
+energy_clean
 ```
 
 e.  Discussion: Why might regex cleaning be important before performing joins or aggregations?\
-    \
+    it can isolates the important information we want from massive data, and clean out the only data we need with perfect styling and format.
 
 #### Q2. State Datasets: Joins and Pivots
 
@@ -76,27 +79,30 @@ states
 a.  Perform a left join to combine socioeconomic and regional data.
 
 ```{r}
-
+left_merged <- left_join(regions, states, by = "state")
+nrow(left_merged)
 ```
 
 b.  Perform an inner join. How many rows remain, and why is it the same or different?
 
 ```{r}
-
+inner_merged <- inner_join(regions, states)
+nrow(inner_merged)
 ```
 
 
 c.  Perform an anti join to check if any state names don’t match between datasets. What might cause mismatches like this in real projects?
 
 ```{r}
-
+anti_join(regions, states, by = "state")
 ```
 
 d.  Discussion: Why would you prefer a left join over an inner join when merging state-level datasets?\
-    \
+    left join we can choose which to be left and which we dont want, but inner we cant choose
 e. Use pivot_longer() to make the socioeconomic data longer.\
 
 ```{r}
+a <-pivot_wider(states, names_from = Population, values_from = state)
 
 ```
 

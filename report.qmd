@@ -14,12 +14,28 @@ library(stringr)
 library(tidyr)
 library(ggplot2)
 
-if (!exists("params")) params <- list(data_dir = ".")
-data_dir <- params$data_dir
-find_file <- function(name) file.path(data_dir, name)
+# Try common data directories relative to the current working dir
+candidates <- c(
+  "data",
+  "./data",
+  "../data",
+  "project4/ev-power-JreamIT/data",
+  "./project4/ev-power-JreamIT/data"
+)
 
-price_file <- read_csv("project4/ev-power-JreamIT/data/av-energy-price-2021-2023.csv")
-ev_file <- read_csv("project4/ev-power-JreamIT/data/ev-registrations-by-state-2023.csv")
+data_dir <- NA_character_
+for (p in candidates) {
+  if (dir.exists(p) &&
+      file.exists(file.path(p, "av-energy-price-2021-2023.csv")) &&
+      file.exists(file.path(p, "ev-registrations-by-state-2023.csv"))) {
+    data_dir <- p
+    break
+  }
+}
+if (is.na(data_dir)) stop("Could not locate data directory. Check where the two CSVs live.")
+
+price_file <- read_csv(file.path(data_dir, "av-energy-price-2021-2023.csv"), show_col_types = FALSE)
+ev_file    <- read_csv(file.path(data_dir, "ev-registrations-by-state-2023.csv"), show_col_types = FALSE)
 
 head(price_file)
 head(ev_file)
