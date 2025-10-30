@@ -8,27 +8,167 @@ format: typst
 ## **Part 0: libraries**
 
 ```{r}
+library(readr)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
 
+if (!exists("params")) params <- list(data_dir = ".")
+data_dir <- params$data_dir
+find_file <- function(name) file.path(data_dir, name)
+
+price_file <- read_csv("project4/ev-power-JreamIT/data/av-energy-price-2021-2023.csv")
+ev_file <- read_csv("project4/ev-power-JreamIT/data/ev-registrations-by-state-2023.csv")
+
+head(price_file)
+head(ev_file)
+
+strip_price <- function(x){
+  x |>
+    str_replace_all("(?i)per\\s*MMBtu|USD|est\\.|about", "") |>
+    str_replace_all("[^0-9.\\-]", "") |>            
+    readr::parse_number()
+}
+
+strip_count <- function(x){
+  suppressWarnings(
+    x |>
+      str_replace_all("[^0-9.\\-]", "") |>
+      readr::parse_number()
+  )
+}
+
+
+state_lookup_full  <- c(state.name, "District of Columbia")
+state_lookup_abb   <- c(state.abb,  "DC")
+to_full <- function(x){
+  out <- ifelse(nchar(x) == 2, state_lookup_full[match(toupper(x), state_lookup_abb)], x)
+  out
+}
 ```
 
 ## **Part 1:** **Defining Research Question**
 
-Chosen Question:
+Chosen Question:How have average energy prices changed from 2021 to 2023, and which U.S. states lead in electric vehicle (EV) adoption?
 
 ## **Part 2: Data Preparation and Cleaning**
 
 ```{r}
+price_clean <- price_file |>
+  rename_with(tolower)
 
+has_year_cols <- any(grepl("202[1-3]", names(price_clean)))
+if (ncol(price_clean) > 1 && !("state" %in% names(price_clean))) {
+  price_clean <- price_clean |> rename(state = 1)
+}
+if (ncol(price_clean) > 1) {
+  price_clean <- price_clean |> mutate(across(-state, strip_price))
+}
+
+
+if (ncol(price_clean) == 1 || !has_year_cols) {
+  price_clean <- tibble(line = as.character(price_file[[1]])) |>
+    filter(!is.na(line), nchar(trimws(line)) > 0) |>
+    mutate(line = str_replace(line, '^"(.*)"$', "\\1")) |>
+    separate(line,
+             into = c("state","price_2021","price_2022","price_2023"),
+             sep = ",", fill = "right", extra = "merge") |>
+    mutate(
+      state       = str_trim(state),
+      price_2021  = strip_price(price_2021),
+      price_2022  = strip_price(price_2022),
+      price_2023  = strip_price(price_2023)
+    )
+}
+
+price_clean <- price_clean |>
+  select(state, matches("202[1-3]"))
+
+ev_clean <- ev_file |>
+  rename_with(tolower) |>
+  select(1, 2) |>
+  rename(state = 1, ev_registrations = 2) |>
+  mutate(
+    state = str_trim(state),
+    ev_registrations = strip_count(ev_registrations)
+  ) |>
+  filter(!is.na(ev_registrations))
 ```
 
 ## **Part 3: Joining / Pivoting Datasets for Analysis**
 
 ```{r}
+year_cols <- grep("202[1-3]", names(price_clean), value = TRUE)
+if (length(year_cols) == 0) stop("No year columns found in price_clean after cleaning.")
 
+price_long <- price_clean |>
+  pivot_longer(cols = dplyr::all_of(year_cols),
+               names_to = "year",
+               values_to = "price") |>
+  mutate(year = readr::parse_integer(stringr::str_replace_all(year, "\\D", "")))
+
+price_2023 <- price_long |>
+  filter(year == 2023) |>
+  transmute(
+    state_full = ifelse(nchar(state) == 2, to_full(state), tools::toTitleCase(state)),
+    price_2023 = price
+  ) |>
+  filter(!is.na(price_2023))
+
+ev_ready <- ev_clean |>
+  mutate(state_full = ifelse(nchar(state) == 2, to_full(state), tools::toTitleCase(state))) |>
+  select(state_full, ev_registrations)
+
+compare_2023 <- ev_ready |>
+  inner_join(price_2023, by = "state_full")
 ```
 
 ## **Part 4: Mapping Visualization**
 
 ```{r}
 
+avg_price <- price_long |>
+  group_by(year) |>
+  summarise(avg_price = mean(price, na.rm = TRUE), .groups = "drop")
+
+ggplot(avg_price, aes(year, avg_price)) +
+  geom_line() + geom_point() +
+  labs(title = "Average Energy Price (2021–2023)",
+       x = "Year", y = "USD per MMBtu") +
+  theme_minimal()
+
+
+ev_top10 <- ev_ready |>
+  arrange(desc(ev_registrations)) |>
+  slice_head(n = 10)
+
+ggplot(ev_top10, aes(x = reorder(state_full, ev_registrations), y = ev_registrations)) +
+  geom_col() + coord_flip() +
+  labs(title = "Top 10 States by EV Registrations (2023)",
+       x = "State", y = "EV Registrations") +
+  theme_minimal()
+
+
+ggplot(compare_2023, aes(price_2023, ev_registrations)) +
+  geom_point() +
+  labs(title = "EV Registrations vs Average Energy Price (2023)",
+       x = "Average Energy Price (USD per MMBtu)",
+       y = "EV Registrations") +
+  theme_minimal()
+
+
+library(maps)
+
+us_map <- ggplot2::map_data("state") |>
+  mutate(state_full = tools::toTitleCase(region))
+
+map_ev <- us_map |>
+  left_join(ev_ready, by = "state_full")
+
+ggplot(map_ev, aes(long, lat, group = group, fill = ev_registrations)) +
+  geom_polygon(color = "white", size = 0.2) +
+  scale_fill_gradient(low = "white", high = "steelblue", na.value = "grey90") +
+  labs(title = "EV Registrations by State (2023)", fill = "EVs") +
+  theme_void()
 ```
