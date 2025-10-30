@@ -145,36 +145,34 @@ compare_2023 <- ev_ready |>
 ```{r}
 
 avg_price <- price_long |>
-  group_by(year) |>
-  summarise(avg_price = mean(price, na.rm = TRUE), .groups = "drop")
+  dplyr::group_by(year) |>
+  dplyr::summarise(avg_price = mean(price, na.rm = TRUE), .groups = "drop")
 
-ggplot(avg_price, aes(year, avg_price)) +
+p1 <- ggplot(avg_price, aes(year, avg_price)) +
   geom_line() + geom_point() +
   labs(title = "Average Energy Price (2021–2023)",
        x = "Year", y = "USD per MMBtu") +
   theme_minimal()
-
+print(p1)
 
 ev_top10 <- ev_ready |>
   arrange(desc(ev_registrations)) |>
   slice_head(n = 10)
 
-ggplot(ev_top10, aes(x = reorder(state_full, ev_registrations), y = ev_registrations)) +
+p2 <- ggplot(ev_top10, aes(x = reorder(state_full, ev_registrations), y = ev_registrations)) +
   geom_col() + coord_flip() +
   labs(title = "Top 10 States by EV Registrations (2023)",
        x = "State", y = "EV Registrations") +
   theme_minimal()
+print(p2)
 
-
-ggplot(compare_2023, aes(price_2023, ev_registrations)) +
-  geom_point() +
+p3 <- ggplot(compare_2023, aes(x = price_2023, y = ev_registrations)) +
+  geom_point(color = "tomato", size = 2.5) +
   labs(title = "EV Registrations vs Average Energy Price (2023)",
        x = "Average Energy Price (USD per MMBtu)",
        y = "EV Registrations") +
   theme_minimal()
-
-
-library(maps)
+print(p3)
 
 us_map <- ggplot2::map_data("state") |>
   mutate(state_full = tools::toTitleCase(region))
@@ -182,9 +180,10 @@ us_map <- ggplot2::map_data("state") |>
 map_ev <- us_map |>
   left_join(ev_ready, by = "state_full")
 
-ggplot(map_ev, aes(long, lat, group = group, fill = ev_registrations)) +
-  geom_polygon(color = "white", size = 0.2) +
+p4 <- ggplot(map_ev, aes(long, lat, group = group, fill = ev_registrations)) +
+  geom_polygon(color = "white", linewidth = 0.2) +
   scale_fill_gradient(low = "white", high = "steelblue", na.value = "grey90") +
   labs(title = "EV Registrations by State (2023)", fill = "EVs") +
   theme_void()
+print(p4)
 ```
